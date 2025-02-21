@@ -191,7 +191,7 @@ class BinaryWriter:
         self.writeDword(neg | e | m)
 
     def writePadding(self, bcount):
-        string = 'This is padding data to alignme'
+        string = 'Padding '
         string = string * int(ceil(bcount/len(string)))
         self.writeString(string[:bcount])
 

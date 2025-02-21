@@ -1,26 +1,10 @@
+# RightClick menu
 import bpy
 import sys
 import os.path
-input_path=sys.argv[-1]  # path to the bmd file
-name = os.path.splitext(os.path.basename(input_path))[0]
-basedir = os.path.dirname(input_path)
+path=' '.join(sys.argv[4:])  # path to the bmd file
 
-
-#### here are some parameters that need to be changed manually
-
-# export multiple fbx files, one per imported animation
-one_file_per_action = True
-
-# forcefully concatenate all animations into one large animation
-# not recommended, but might be necessary on earlier versions of blender, depending on how good the fbx exporter was
-force_fuse_animations = False
-
-if force_fuse_animations and one_file_per_action:
-    print("ERROR: you asked for two mutually exclusive options when editing IOmanager.py")
-    bpy.ops.wm.quit_blender()
-
-
-#### and now the code itself
+print("PATH: " + path)
 
 bpy.data.objects.remove(bpy.data.objects['Cube'])
 bpy.data.meshes.remove(bpy.data.meshes['Cube'])
@@ -32,46 +16,53 @@ bpy.data.objects.remove(bpy.data.objects['Camera'])
 bpy.data.cameras.remove(bpy.data.cameras['Camera'])
 
 try:
-    bpy.ops.blemd.importer(filepath=input_path)
+    bpy.ops.blemd.importer(filepath=path)
 except AttributeError:  # module not loaded: do it manually
     import blemd
     temp = blemd.BModel.BModel()
     # current_dir = OSPath.abspath(OSPath.split(__file__)[0])  # automatically find where we are
     temp.SetBmdViewExePath(os.path.split(blemd.__file__)[0]+os.path.sep)  # add backslash for good measure
-    temp.Import(input_path,
+    temp.Import(path,
         boneThickness=5,
         frc_cr_bn=False,
-        import_anims=True,
-        # I'm pretty sure nla tracks don't fully work when exporting to fbx
-        import_anims_type= ('CHAINED' if force_fuse_animations else 'SEPARATE'),
-        no_rot_cv=True,
+        sv_anim='SEPARATE',
         tx_pck='DO',
         ic_sc=True,
         imtype='TGA'
     )
     # actual model importing
-
-def do_export(override_name=None, **kw):
-    if override_name is not None:
-        path = os.path.join(basedir, override_name + '.fbx')
-    else:
-        path = input_path[:-4]+'.fbx'
-    # this line (below) is the export command. feel free to change it to whatever you want
-    bpy.ops.export_scene.fbx(filepath=path, axis_forward='-Z', axis_up='Y', path_mode='COPY', embed_textures=True, **kw)
-
-
-if one_file_per_action:
-    # note: this RELIES on "import_anims_type='SEPARATE'" from earlier
-    armature = bpy.data.objects[name + '_armature']
-    actions = [strip.action for strip in armature.animation_data.nla_tracks[0].strips]
-    armature.animation_data_clear()
-    armature.animation_data_create()
-    armature.animation_data.use_nla = False
     
-    for action in actions:
-        armature.animation_data.action = action
-        do_export(override_name=action.name, bake_anim_use_nla_strips=False, bake_anim_use_all_actions=False)
-else:
-    do_export()
+    for ob in bpy.data.objects:
+        if "armature" in ob.name:
+            try:
+                #ob.rotation_euler[0] = math.radians(90)
+                print ("removed material from " + ob.name)
+                ob.scale = (0.01, 0.01, 0.01)
+            except:
+                print (ob.name + " does not have materials.")
+                        
+    for a in bpy.context.screen.areas:
+        if a.type == 'VIEW_3D':
+             for s in a.spaces:
+                if s.type == 'VIEW_3D':
+                    s.clip_end = 999999999
+                            
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas: # iterate through areas in current screen
+            if area.type == 'VIEW_3D':
+                for space in area.spaces: # iterate through spaces in current VIEW_3D area
+                    if space.type == 'VIEW_3D': # check if space is a 3D view
+                        space.shading.type = 'MATERIAL'            
+                        
+    for mat in bpy.data.materials:
+        if not mat.use_nodes:
+            continue
+        for n in mat.node_tree.nodes:
+            if n.type == 'BSDF_PRINCIPLED':
+                n.inputs["Specular"].default_value = 0
+
+
+# this line (below) is the export command. feel free to change it to whatever you want
+bpy.ops.export_scene.fbx(filepath=path[:-3]+'fbx', axis_forward='Y', axis_up='Z', path_mode='COPY', embed_textures=True, apply_scale_options='FBX_SCALE_UNITS',apply_unit_scale=True)
 
 bpy.ops.wm.quit_blender()  # quit blender the clean way

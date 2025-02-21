@@ -36,14 +36,6 @@ def get_mixgroup(type):
             MIX_GROUP_NODETREE_C = gnt = bpy.data.node_groups.new('glsl_mix', 'ShaderNodeTree')
             in_n = gnt.nodes.new('NodeGroupInput')
             out_n = gnt.nodes.new('NodeGroupOutput')  # creating real input and output nodes
-            if bpy.app.version >= (4,0,0):
-                gnt.interface.new_socket('mixer',in_out='INPUT',socket_type='NodeSocketColor',
-                    description='values used as coefficients for the mixing of individual color channels')
-                gnt.interface.new_socket('color_0',in_out='INPUT',socket_type='NodeSocketColor',
-                    description='the color obtained when `mixer=(0,0,0)`')
-                gnt.interface.new_socket('color_1',in_out='INPUT',socket_type='NodeSocketColor',
-                    description='the color obtained when `mixer=(1,1,1)`')
-                gnt.interface.new_socket('output',in_out='OUTPUT',socket_type='NodeSocketColor')
             #gnt.inputs.new('COLOR', 'blend_value')
             #gnt.inputs.new('COLOR', 'input_A')
             #gnt.inputs.new('COLOR', 'input_B')
@@ -98,15 +90,6 @@ def get_mixgroup(type):
 
             in_n = gnt.nodes.new('NodeGroupInput')
             out_n = gnt.nodes.new('NodeGroupOutput')  # creating real input and output nodes
-
-            if bpy.app.version >= (4,0,0):
-                gnt.interface.new_socket('mixer',in_out='INPUT',socket_type='NodeSocketFloat',
-                    description='values used as coefficients for the mixing')
-                gnt.interface.new_socket('color_0',in_out='INPUT',socket_type='NodeSocketFloat',
-                    description='the value obtained when `mixer=0`')
-                gnt.interface.new_socket('color_1',in_out='INPUT',socket_type='NodeSocketFloat',
-                    description='the value obtained when `mixer=1`')
-                gnt.interface.new_socket('output',in_out='OUTPUT',socket_type='NodeSocketFloat')
 
             inv_factor = gnt.nodes.new('ShaderNodeMath')
             inv_factor.operation = 'SUBTRACT'
@@ -206,6 +189,12 @@ class Sampler:
         self.mirrorS = False
         self.mirrorT = False
 
+    def setTexWrapModeNOT(self, smode, tmode):
+        self.wrapS = True
+        self.wrapT = False
+        self.mirrorS = False
+        self.mirrorT = True
+
     def setTexWrapMode(self, smode, tmode):
         if smode == 0:
             self.wrapS = False
@@ -239,14 +228,6 @@ class Sampler:
             image = newtex_image(self.name)
         texnode = placer.add('ShaderNodeTexImage', row=is_alpha_row)
         texnode.image = image
-
-        if isinstance(coords, Vector):
-            vectnode = placer.add('ShaderNodeCombineXYZ', row=is_alpha_row)
-            vectnode.inputs[0].default_value = coords.x
-            vectnode.inputs[1].default_value = coords.y
-            vectnode.inputs[2].default_value = coords.z
-            coords = vectnode.outputs[0]
-        
         # XCX image mapping (clamp, mirror)
         if self.mirrorS or self.mirrorT:
             local_frame = placer.add('NodeFrame', 'mirroring', row=is_alpha_row)
@@ -757,30 +738,34 @@ class MaterialSpace:
     # this is a transfer function to create blender nodes
     def export(self):
         # then, create output and matertial nodes
-        mat_node = self.placer.add('ShaderNodeBsdfDiffuse')
-        alpha_node = self.placer.add('ShaderNodeBsdfTransparent')
-        mix_node = self.placer.add('ShaderNodeMixShader')
+        #mat_node = self.placer.add('ShaderNodeBsdfDiffuse')
+        #alpha_node = self.placer.add('ShaderNodeBsdfTransparent')
+        #mix_node = self.placer.add('ShaderNodeMixShader')
+        bsdf_node = self.placer.add('ShaderNodeBsdfPrincipled')
         out_node = self.placer.add('ShaderNodeOutputMaterial')
 
-        # link them
-        self.nt.links.new(mat_node.outputs[0], mix_node.inputs[2])  # material:out_color -> output:color
-        self.nt.links.new(alpha_node.outputs[0], mix_node.inputs[1])
-        self.nt.links.new(mix_node.outputs[0], out_node.inputs[0])
+        #bsdf_node.inputs('Specular').default_value = 0
 
-        # create color and link
-        makelink(self.nt, self.finalcolorc.data, mat_node.inputs[0])
+        ## create color and link
+        self.nt.links.new(self.finalcolorc.data, bsdf_node.inputs[0])
+        self.nt.links.new(bsdf_node.outputs[0], out_node.inputs[0])
 
-        # create alpha and link
-        # alpha testing!!
+        ## link them
+        #self.nt.links.new(mat_node.outputs[0], out_node[2])  # material:out_color -> output:color
+        #self.nt.links.new(alpha_node.outputs[0], mix_node.inputs[1])
+        #self.nt.links.new(mix_node.outputs[0], out_node.inputs[0])
 
-        if self.ac_const == 'default' or True:
-            makelink(self.nt, self.finalcolora.data, mix_node.inputs[0])  # amount of alpha
-        elif self.ac_const == True:  # discard
-            mix_node.inputs[0].default_value = 0
-        elif self.ac_const == False:
-            mix_node.inputs[0].default_value = 1
-        else:
-            raise ValueError('alpha compare failed.')
+        ## create alpha and link
+        ## alpha testing!!
+
+        #if self.ac_const == 'default' or True:
+            #makelink(self.nt, self.finalcolora.data, mix_node.inputs[0])  # amount of alpha
+        #elif self.ac_const == True:  # discard
+            #mix_node.inputs[0].default_value = 0
+        #elif self.ac_const == False:
+            #mix_node.inputs[0].default_value = 1
+        #else:
+            #raise ValueError('alpha compare failed.')
 
 
 def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
@@ -820,7 +805,6 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
             mapping.inputs[3].default_value[1] = tmi.scaleV
             mapping.inputs[1].default_value[0] = (tmi.scaleCenterX*(1 - tmi.scaleU))
             mapping.inputs[1].default_value[1] = (1 - tmi.scaleCenterY) * (1 - tmi.scaleV)
-            dst = mapping.outputs[0]
     elif texGen.texGenType == 0xa:
         if (texGen.matrix != 0x3c):
             log.warning("writeTexGen() type 0xa: unexpected matrix %x", texGen.matrix)
@@ -828,7 +812,6 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
             log.warning("writeTexGen() type 0xa: unexpected src %x", texGen.texGenSrc)
 
         log.warning("writeTexGen(): Found type 0xa (SRTG), doesn't work right yet")
-        dst = Vector((0,0,0))  # "null" vector
 
         #// t << "sphereMap*vec4(gl_NormalMatrix*gl_Normal, 1.0)";
 
@@ -843,7 +826,6 @@ def makeTexCoords(material, texGen, i, matbase, mat3, data_placer):
         #out << "  " << dest << " = color; //(not sure...)\n";
     else:
         log.warning("writeTexGen: unsupported type %x", hex(texGen.texGenType))
-        dst = Vector((0,0,0))  # "null" vector
         #out << "  " << dest << " = vec4(0.0, 0.0, 0.0, 0.0); //(unsupported texgentype)\n"
 
     material.texcoords[i] = dst
@@ -897,7 +879,7 @@ def createMaterialSystem(matBase, mat3, tex1, texpath, extension, nt, params):
             texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
             if len(tex1.texHeaders) <= texId:
                 if params.PARANOID:
-                    raise ValueError("Bad TEX/MAT section: texture {0:d} does not exist".format(texId))
+                    raise ValueError(f"Bad TEX/MAT section: texture {texId:d} does not exist")
                 else:
                     material.textures[i] = Sampler()  # "missing" texture
                     log.warning("no known texture with  ID %d", texId)
@@ -1001,14 +983,14 @@ def create_simple_material_system(matBase, mat3, tex1, texpath, extension, nt, p
     material = MaterialSpace(nt)
     data_placer = NodePlacer(
         nt,
-        material.placer.add('NodeFrame', 'data'),
+        material.placer.add('NodeFrame', 'dataa'),
         30, False,
         mat3.texGenCounts[matBase.texGenCountIndex]+2
     )
     
     material.texcoords = [None] * mat3.texGenCounts[matBase.texGenCountIndex]
-    for i in range(mat3.texGenCounts[matBase.texGenCountIndex]):  # num TexGens == num Textures
-        makeTexCoords(material, mat3.texGenInfos[matBase.texGenInfos[i]], i, matBase, mat3, data_placer)
+    #for i in range(mat3.texGenCounts[matBase.texGenCountIndex]):  # num TexGens == num Textures
+        #makeTexCoords(material, mat3.texGenInfos[matBase.texGenInfos[i]], i, matBase, mat3, data_placer)
 
     sampler = None
     has_texture=True
@@ -1016,8 +998,15 @@ def create_simple_material_system(matBase, mat3, tex1, texpath, extension, nt, p
         if matBase.texStages[i] != 0xffff:
             texId = mat3.texStageIndexToTextureIndex[matBase.texStages[i]]
             currTex =tex1.texHeaders[texId]
-            sampler = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + extension))
+
+            sampler = Sampler(OSPath.join(texpath, tex1.stringtable[texId] + ".png"))
+            #sampler.setTexWrapMode(currTex.wrapS, currTex.wrapT)
+
+            print("WRAPING " + str(tex1.stringtable[texId]))
+            print("wrapS: " + str(currTex.wrapS) + " :: " + "wrapT: " + str(currTex.wrapT))
+
             sampler.setTexWrapMode(currTex.wrapS, currTex.wrapT)
+            #sampler.setTexWrapMode(2, 2)
             break
     else:
         has_texture = False

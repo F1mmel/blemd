@@ -1,12 +1,15 @@
 """
 A common function module for BleMD.
 Mostly used by BModel, but can be expanded further
+
 """
 
 import bpy
-import os, sys, re, glob
+import os
+import re
 from time import sleep
 import subprocess
+import sys
 from contextlib import contextmanager
 import logging
 
@@ -73,8 +76,9 @@ def ReverseArray(inputArray):
     rev = []
     i = len(inputArray)
     while i > 0:
-        rev.append(inputArray[i-1])
+        rev.append(inputArray[i-1])  # corrected!
         i -= 1
+    # -- inputArray = rev doesn't work
     return rev
 
 
@@ -112,9 +116,12 @@ def SubProcCall(exefile, args, startpath=os.getcwd()):
         log.error('process errors:\n %s', temp.stderr)
 
 
+def getFilenamePath(path):
+    return os.path.split(path)[0] + os.sep
+
 
 def newfile(name):
-    if not os.exists(name):  # if it doesn't exist
+    if not getFiles(name):  # if it doesn't exist
         open(name, 'ab').close()  # create file
 
 
@@ -124,11 +131,41 @@ def getFilenameFile(path):
     return file
     # return os.path.join(dir, file)
 
-
-def getFiles(*pathparts, basedir=""):
-    """get the path of files matching a known globbing pattern, starting with a known base directory"""
-    basedir = glob.escape(basedir)
-    return glob.glob(os.path.join(basedir, *pathparts))
+# XCX use glob instead
+def getFiles(wc_name, bmd_path):
+    # assume wild card is in the last part
+    parentDir = os.path.dirname(bmd_path)
+    animPath = parentDir + "\\bck"
+    path, file = os.path.split(wc_name)
+    returnable = []
+    if '*' in path:
+        raise ValueError('must implement getFiles better')
+    try:
+        a, dirs, files = next(os.walk(os.path.normpath(path)))
+    except StopIteration:
+        return returnable
+    for com in files:
+        if com.endswith('.bck'):
+            
+            if os.sep == '/':
+                wc_name = wc_name.replace('\\', '/')
+            else:
+                #wc_name = wc_name.replace('/', '\\').replace('\\', r'\\')
+                #path = path.replace('/', '\\')
+                #rematcher = wc_name.replace('.', r'\.').\
+                                #replace('*', '.*').\
+                                #replace('(', r'\(').\
+                                #replace(')', r'\)')
+                                
+                #print(animPath + "\\" + com)
+                                
+                fullPath = animPath + "\\" + com
+                fullPath = fullPath.replace(os.sep, '/')     
+                
+                returnable.append(fullPath)
+                print("ADD: " + fullPath)
+            
+    return returnable
 
 def dedup_lines(string):
     lines = {}  # dict: {line: count}
@@ -145,21 +182,13 @@ def dedup_lines(string):
 
 
 class Prog_params:
-    def __init__(
-        self, filename, boneThickness, frc_cr_bn,
-        import_anims, import_anims_type,
-        tx_pck, ic_sc, imtype,
-        dvg=False, nat_bn=False,
-        use_nodes=False,
-        val_msh=False, paranoia=False,
-        no_rot_cv=False,  anim_rot_smallest=False,
-    ):
+    def __init__(self, filename, boneThickness, frc_cr_bn, sv_anim,
+                 tx_pck, ic_sc, imtype, dvg=False, nat_bn=False, use_nodes=False, val_msh=False, paranoia=False, no_rot_cv=False):
         self.filename = filename
         self.boneThickness = boneThickness
         self.forceCreateBones = frc_cr_bn
-        self.loadAnimations = import_anims and not nat_bn
-        self.animationType = import_anims_type
-        self.enforce_smallest_movement = anim_rot_smallest
+        self.loadAnimations = sv_anim != 'DONT' and not nat_bn
+        self.animationType = sv_anim if self.loadAnimations else 'DONT'
         self.naturalBones = nat_bn
         self.packTextures = tx_pck
         self.includeScaling = ic_sc

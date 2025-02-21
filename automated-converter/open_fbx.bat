@@ -1,0 +1,1 @@
+"G:\Programme\Blender\blender.exe" --python "G:\Programme\Blender\3.1\scripts\addons\auto_open.py" -- %1

@@ -7,6 +7,8 @@ else:
 from importlib import reload
 from array import array
 import os
+import glob
+from os import path as OSPath
 
 import bpy
 from mathutils import Matrix, Vector, Euler
@@ -40,10 +42,18 @@ class LoopRepresentation:
         self.normal = None
         self.mm = -1  # reference to the multimatrix entry used to move the point
 
+    # def __eq__(self, other):
+    #    return self.vertex == other.vertex and \
+    #           self.UVs == other.UVs and \
+    #           self.VColors == other.VColors and \
+    #           self.normal == other.normal
+
+
 class FaceRepresentation:
     def __init__(self):
         self.loop_start = -1
         self.material = None
+
 
 class ModelRepresentation:
     def __init__(self):
@@ -81,20 +91,14 @@ class ModelRepresentation:
             ret = array('f', [0.0] * 3 * len(self.loops))
             if common.GLOBALS.no_rot_conversion:
                 for num, com in enumerate(self.loops):
-                    if com.normal is None:
-                        ret[3*num] = ret[3*num+1] = ret[3*num+2] = 0
-                    else:
-                        ret[3 * num] = com.normal.x
-                        ret[3 * num + 1] = com.normal.y
-                        ret[3 * num + 2] = com.normal.z
+                    ret[3 * num] = com.normal.x
+                    ret[3 * num + 1] = com.normal.y
+                    ret[3 * num + 2] = com.normal.z
             else:
                 for num, com in enumerate(self.loops):
-                    if com.normal is None:
-                        ret[3*num] = ret[3*num+1] = ret[3*num+2] = 0
-                    else:
-                        ret[3 * num] = com.normal.x
-                        ret[3 * num + 1] = -com.normal.z
-                        ret[3 * num + 2] = com.normal.y
+                    ret[3 * num] = com.normal.x
+                    ret[3 * num + 1] = -com.normal.z
+                    ret[3 * num + 2] = com.normal.y
         elif type == 'v_indexes':
             ret = array('i')
             for com in self.loops:
@@ -121,7 +125,88 @@ class ModelRepresentation:
 
 
 class BModel:
-    def __init__(self):
+    """# <variable _boneThickness>
+    # <variable inf>
+    # <variable vtx>
+    # <variable shp>
+    # <variable jnt>
+    # <variable evp>
+    # <variable drw>
+    # <variable _mat1>
+    # <variable tex>
+    # <variable _bmdViewPathExe>
+    # <variable _bones>
+    # <variable _iconSize>
+    # <variable _currMaterialIndex>
+    # <variable _currMaterial>
+    # <variable _texturePath>
+    # <variable _texturePrefix>
+    # <variable _bckPaths>
+    # <variable _bmdFilePath>
+    # <variable _bmdDir>
+    # <variable _bmdFileName>
+    # <variable _createBones>
+    # <variable _loadAnimations>
+    # <variable vertices>
+    # <variable faces>
+    # <variable tverts>
+    # <variable tFaces>
+    # <variable normals>
+    # <variable vcFaces>
+    # -- vertex color
+    # <variable vertexMultiMatrixEntry>
+    # <variable _materialIDS>
+    # <variable _subMaterials>
+    # <variable _parentBoneIndexs>
+    # -- doesn't work on characters? required for stages?
+    # <variable _forceCreateBones>
+    # <variable _exportType>
+    # -- #XFILE, #CHARACTER
+    # <variable _runExtractTexturesCmd>
+    # <variable _includeScaling>
+    # <variable _reverseFaces>
+    # -- required for .x export (render eyeraises before face)
+    # <function>
+
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # --newVertIndex = 1,
+    # <variable faceIndex>
+    # <function>
+
+    # <function>
+
+    # -- create frame nodes and setup jnt.matrices
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>
+
+    # <function>"""
+    
+    import bpy
+
+    def __init__(self):  # GENERATED!
         self.vtx = None
         self.DEBUGvgroups = {}
         self._bmdFilePath = ""
@@ -140,29 +225,41 @@ class BModel:
     def SetBmdViewExePath(self, value):
         self._bmdViewPathExe = value
 
+    def TryHiddenDOSCommand(self, exefile, args, startpath):
+
+        print("###################")
+        print(exefile)
+        print(args)
+        print(startpath)
+        try:
+            common.SubProcCall(exefile, args, startpath=startpath)
+        except common.subprocess.CalledProcessError as err:
+            log.error('subprocess error: %s. Expect missing/glitchy textures', err)
 
     def BuildSingleMesh(self):
-        log.debug('Started import section: BuildSingleMesh')
-        # if False:  #self._reverseFaces and False:
-        #     self.model.faces = ReverseArray(self.model.faces)
-        #     self._materialIDS = ReverseArray(self._materialIDS)
-        #     #for com in range(len(self._materialIDS)):
-        #     #    self._materialIDS[com] = len(self._subMaterials)-1-self._materialIDS[com]
-        #     for uv in range(8):
-        #         self.tFaces[uv] = ReverseArray(self.tFaces[uv])
-        #         for num, com in enumerate(self.tv_to_f_v[uv]):
-        #             for num2, com2 in enumerate(com):
-        #                 com2 = (len(self.model.faces)-1-com2[0], com2[1])
-        #                 com[num2] = com2
-        #             self.tv_to_f_v[uv][num] = com
-        #     # vertex colors are now similar to uv textures
-        #     for cv in range(2):
-        #         self.vcFaces[cv] = ReverseArray(self.vcFaces[cv])
-        #         for num, com in enumerate(self.cv_to_f_v[cv]):
-        #             for num2, com2 in enumerate(com):
-        #                 com2 = (len(self.model.faces)-1-com2[0], com2[1])
-        #                 com[num2] = com2
-        #             self.cv_to_f_v[cv][num] = com
+        # -----------------------------------------------------------------
+        # -- mesh
+        log.debug('BuildSMesh point reached')
+        """if False:  #self._reverseFaces and False:
+            self.model.faces = ReverseArray(self.model.faces)
+            self._materialIDS = ReverseArray(self._materialIDS)
+            #for com in range(len(self._materialIDS)):
+            #    self._materialIDS[com] = len(self._subMaterials)-1-self._materialIDS[com]
+            for uv in range(8):
+                self.tFaces[uv] = ReverseArray(self.tFaces[uv])
+                for num, com in enumerate(self.tv_to_f_v[uv]):
+                    for num2, com2 in enumerate(com):
+                        com2 = (len(self.model.faces)-1-com2[0], com2[1])
+                        com[num2] = com2
+                    self.tv_to_f_v[uv][num] = com
+            # vertex colors are now similar to uv textures
+            for cv in range(2):
+                self.vcFaces[cv] = ReverseArray(self.vcFaces[cv])
+                for num, com in enumerate(self.cv_to_f_v[cv]):
+                    for num2, com2 in enumerate(com):
+                        com2 = (len(self.model.faces)-1-com2[0], com2[1])
+                        com[num2] = com2
+                    self.cv_to_f_v[cv][num] = com"""
 
         # TODO: should never have undefined materials
 
@@ -191,8 +288,8 @@ class BModel:
         try:
             bm_to_pm = {}  # index shifter: material, get mat index
             for i in range(len(self._subMaterials)):
+                print("Material: " + str(self._subMaterials[i]))
                 MatH.add_material(modelObject, self._subMaterials[i])
-            errmat = MatH.add_err_material(modelObject)
             for num, com in enumerate(modelObject.material_slots):
                 bm_to_pm[com.material] = num
             for num, com in enumerate(self._materialIDS):  # assign materials to faces
@@ -219,12 +316,7 @@ class BModel:
 
         with common.active_object(modelObject):
             if not active_uv:
-                prev_mode = bpy.context.mode
-                bpy.ops.paint.texture_paint_toggle()
                 bpy.ops.paint.add_simple_uvs()
-                bpy.ops.paint.texture_paint_toggle()
-                if prev_mode == 'EDIT_MESH':
-                    bpy.ops.object.editmode_toggle()
                 active_uv = modelMesh.uv_layers[0]
 
             modelMesh.update()
@@ -254,9 +346,9 @@ class BModel:
                     mod = modelObject.modifiers.new('Armature', type='ARMATURE')
                     arm = bpy.data.armatures.new(modelObject.name+'_bones')
                     self.arm_obj = arm_obj = bpy.data.objects.new(modelObject.name+'_armature', arm)
+                    bpy.context.collection.objects.link(arm_obj)
                     modelObject.parent = arm_obj
                     mod.object = arm_obj
-                    bpy.context.collection.objects.link(arm_obj)
                     bpy.context.view_layer.update()
 
                 with common.active_object(arm_obj):
@@ -269,7 +361,7 @@ class BModel:
                         realbone = arm.edit_bones[bone.name.fget()]
                         if isinstance(bone.parent.fget(), PBones.Pseudobone):
                             realbone.parent = arm.edit_bones[bone.parent.fget().name.fget()]
-
+                        
                         realbone.head.xyz = bone.position.xyz
                         if self.params.naturalBones and len(bone.children)==1:
                             realbone.tail.xyz = bone.children[0].position.xyz
@@ -317,31 +409,25 @@ class BModel:
         ### deal with normals
 
         try:
-            if bpy.app.version < (4,1,0):
-                # this might not be needed in some prior versions,
-                # but 4.1 is the one where some of the API was removed
-                modelMesh.create_normals_split()  # does this stabilize normals?
+            modelMesh.create_normals_split()  # does this stabilize normals?
 
-                for face in modelMesh.polygons:
-                    face.use_smooth = True  # loop normals have effect only if smooth shading
+            for face in modelMesh.polygons:
+                face.use_smooth = True  # loop normals have effect only if smooth shading
 
-                # create custom data to write normals correctly?
-                modelMesh.update()
-                modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
+            # create custom data to write normals correctly?
+            modelMesh.update()
 
-            # what we do here is that we store all the vectors (n_points*3 floats)
-            # in a single "line" in memory, then create an iterator over that,
-            # that will be called over 3 places as if it were 3 different iterators
+            # begin not understood black box (where does this thing write to make normals stable?)
             clnors = self.model.toarray('normal')
 
-            modelMesh.normals_split_custom_set(
-                tuple(zip(*
-                    (iter(clnors),) * 3
-                ))
-            )
-            if bpy.app.version < (4,1,0):
-                xmodelMesh.use_auto_smooth = True
-                #modelMesh.show_edge_sharp = True
+            modelMesh.polygons.foreach_set("use_smooth", [True] * len(modelMesh.polygons))
+
+            modelMesh.normals_split_custom_set(tuple(
+                                                     zip(*(iter(clnors),) * 3)
+                                                    ))
+            modelMesh.use_auto_smooth = True
+            #modelMesh.show_edge_sharp = True
+            # end not understood black box
 
             if self.params.validate_mesh:
                 ll = len(modelMesh.loops)
@@ -354,13 +440,13 @@ class BModel:
             log.error('Normals weren\'t set (error is %s)', err)
         modelMesh.update()
 
-
+            
         return modelObject
 
     def LoadModel(self, filePath):
         """loads mesh data from file"""
 
-        log.debug("Started import section: Load")
+        log.debug("Load : ")
         # -- load model
         br = BinaryReader.BinaryReader()
         br.Open(filePath)
@@ -408,10 +494,7 @@ class BModel:
             elif strTag == "TEX":  # TEX1
                 self.tex.LoadData(br)
             elif strTag == "MDL":  # MDL3
-                try:
-                    self.mdl.LoadData(br)
-                except Exception as err:
-                    log.warning("failed to load the (currently unused) MDL section: %s", repr(err))
+                self.mdl.LoadData(br)
             else:
                 log.warning('Tag (%s) not recognized. Resulting mesh could be weird', strTag)
             br.SeekSet(streamPos)
@@ -501,30 +584,11 @@ class BModel:
                 elif currPrimitive.type == 0xa0:
                     iterator = Vtx1.FanIterator(currPrimitive.points)
                     # GL_TRIANGLE_FAN
-                elif currPrimitive.type == 0x90:
-                    assert len(currPrimitive.points) %3 ==0
-                    iterator = Vtx1.SimpleIterator(currPrimitive.points)
-                    # GL_TRIANGLES ?
-                elif currPrimitive.type == 0x80:
-                    assert len(currPrimitive.points) %3 ==0
-                    iterator = Vtx1.SimpleQuadIterator(currPrimitive.points)
-                    # GL_QUADS ?
                 else:
                     if self.params.PARANOID:
-                        raise ValueError(
-                            "Unknown primitive type {:#x}. Primitive has length {:d} and has points {!r}".format(
-                                currPrimitive.type,
-                                len(currPrimitive.points),
-                                [point.posIndex for point in currPrimitive.points],
-                        ))
+                        raise ValueError("unknown primitive type")
                     else:
-                        log.error(
-                            "Unknown primitive type {:#x}. Primitive has length {:d} and has points {!r}",
-                            currPrimitive.type,
-                            len(currPrimitive.points),
-                            [point.posIndex for point in currPrimitive.points],
-                        )
-                        continue
+                        log.warning('Unknown primitive %d', currPrimitive.type)
                 for p0, p1, p2 in iterator:
                     posIndex0 = p0.posIndex
                     posIndex1 = p1.posIndex
@@ -657,7 +721,7 @@ class BModel:
 
             orientation = (Mat44.rotation_part(parentMatrix) @  # use rotation part of parent matrix
                             Euler((f.rx, f.ry, f.rz), 'XYZ').to_matrix().to_4x4())  # apply local rotation
-
+            
             # the final blender bone orientation should be always "towards global Y"
             # this position might be achieved after Y-up -> Z-up conversion, if it happens.
             # define the pseudobone default orientation correctly (in Y-up space / BMD space)
@@ -681,7 +745,7 @@ class BModel:
 
     def DrawScenegraph(self, sg, parentMatrix, onDown=True, matIndex=0):
         """create faces and assign UVs, Vcolors, materials"""
-        log.debug("Started imprort section: DrawScenegraph")
+
         effP = parentMatrix.copy()
 
         n = sg
@@ -700,6 +764,7 @@ class BModel:
                 mat = self._mat1.materialbases[self._mat1.indexToMatIndex[n.index]]
                 # materials can be reused in a single file: cache them
                 if mat.material:
+                    print("In material")
                     self._currMaterial = mat.material[0].copy()
                     log.debug("material was cached")
                     # matIndex = mat.material[1]
@@ -781,7 +846,7 @@ class BModel:
             self.BuildScenegraph(childSG, child)
 
     def DrawScene(self):
-        log.debug("Started import section: DrawScene")
+        log.debug("DrawScene point reached")
         try:
             sg = self.inf.rootSceneGraph
             self.model = ModelRepresentation()
@@ -825,7 +890,7 @@ class BModel:
             self.LoadAnimations()
 
     def LoadAnimations(self):
-        log.debug("Started import section: animations")
+        log.debug("animations: ")
         animationCount = 1  # default pose at frame 0
 
         startFrame = 1
@@ -833,13 +898,22 @@ class BModel:
 
         if self.arm_obj.animation_data is None:
             self.arm_obj.animation_data_create()
-        if self.params.animationType == 'SEPARATE':  # add NLA track compilation
-            track = self.arm_obj.animation_data.nla_tracks.new()
-            track.name = self.arm_obj.name + '_track'
+            if self.params.animationType == 'SEPARATE':  # add NLA track compilation
+                track = self.arm_obj.animation_data.nla_tracks.new()
+                track.name = self.arm_obj.name + '_track'
+                print("Created track")
+                
+        #print(glob.glob("X:/Meine Ablage/Extracted/Object/horse/bck/*"))        
 
         bckFiles = []
         for bckPath in self._bckPaths:
-            bckFiles += common.getFiles(bckPath)
+            bckFiles += common.getFiles(bckPath, self._bmdPath)
+            #print("Found: " + str(common.getFiles(bckPath)) + " :: " + bckPath)
+            
+        #for bckPath in glob.glob("X:/Meine Ablage/Extracted/Object/horse/bck/*"):
+            #bckFiles += '"' + bckPath + '"'
+            #print("Found: " + bckPath)
+            
         #btpFiles = []
         #for btpPath in self._btpPaths:
         #    btpFiles += common.getFiles(btpPath)
@@ -847,66 +921,37 @@ class BModel:
 
         for f in bckFiles:
             bckFileName = common.getFilenameFile(f)
+            print("bckFileName: " + bckFileName)
             b = Bck.Bck_in()
             try:
+                print("Load anim: " + bckFileName)
                 b.LoadBck(f, len(self._bones))
             except Exception as err:
                 log.warning('an animation file was corrupted. (error is %s)', err)
                 continue
 
-            # load the possibly existing btp file accompanying the bck one
-            #try:
-            #    btpIndex = btpFileNames.index('bckFiles')
-            #except ValueError:  # no btp file to go with this bck file
-            #    btp = None
-            #else:
-            #    btp = Btp.Btp()
-            #    btp.LoadBtp(btpFiles[btpIndex])
-            #    del btpFiles[btpIndex]
-            #    del btpFileNames[btpIndex]
-
             if not len(b.anims):
+                print("Error compiling: " + str(bckFileName))
                 # file loader already knows that it won't fit
                 errMsg += bckFileName + "\n"
             else:
-                if self.params.animationType == 'SEPARATE':
-                    try:
-                        b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
-                        action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
-                        action.bck_loop_type = b.loopType.name
-                    except Exception as err:
-                        import traceback
-                        log.error('animation file doesn\'t apply as expected (error is:)\n%s', traceback.format_exception(err.__class__, err, err.__traceback__))
-                        continue
-                    finally:
-                        for com in self._bones:
-                            com.reset()
-                    bpy.context.scene.frame_end = startFrame + b.animationLength + 5
+                self.params.animationType = 'SEPARATE'
+                try:
+                    print("Parsing animation: " + bckFileName);
+                    b.AnimateBoneFrames(0, self._bones, 1, self.params.includeScaling)
+                    action = PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames, bckFileName)
+                except Exception as err:
+                    log.error('animation file doesn\'t apply as expected (error is %s)', err)
+                    continue
+                finally:
+                    for com in self._bones:
+                        com.reset()
+                bpy.context.scene.frame_end = startFrame + b.animationLength + 5
                     # (create space to insert strip)
-                    try:
-                        track.strips.new(bckFileName+'_strip', startFrame, action)
-                    except Exception as err:
-                        log.error(
-                            'out of space:  %d + %d, %s',
-                            startFrame, action.frame_range[1],
-                            repr((strip.frame_start, strip.frame_end) for strip in track.strips)
-                        )
-                        # assume the previous action is out of range: move it.
-                        corrupted_action_track = self.arm_obj.animation_data.nla_tracks.new()
-                        corrupted_action_track.name = 'CORRUPTED_ACTION_'+str(animationCount)
-                        corrupted_action = track.strips[-1].action
-                        corrupted_action_track.strips.new('action', int(track.strips[-1].frame_start),
-                                                          corrupted_action)
-                        track.strips.remove(track.strips[-1])
-                        track.strips.new(bckFileName + '_strip', startFrame, action)  # try again
-                    # add action to NLA compilation
 
-                elif self.params.animationType == 'CHAINED':
-                    try:
-                        b.AnimateBoneFrames(startFrame, self._bones, 1, self.params.includeScaling)
-                    except Exception as err:
-                        log.error('Animation file doesn\'t apply as expected (error is:)\n%s', traceback.format_exception(err.__class__, err, err.__traceback__))
-                        continue
+                track.strips.new(bckFileName+'_strip', startFrame, action)
+
+                
                 numberOfFrames = b.animationLength
                 if b.animationLength <= 0:
                     numberOfFrames = 1
@@ -915,60 +960,51 @@ class BModel:
                     # kwXPortAnimationName += bckFileName + "," + str(startFrame) + "," + str(numberOfFrames)+ ",1;"
                 startFrame = endFrame + 1
                 animationCount += 1
-
-        if self.params.animationType == 'CHAINED':
-            bpy.context.scene.frame_start = 0
-            bpy.context.scene.frame_end = startFrame
-            try:
-                PBones.apply_animation(self._bones, self.arm_obj, self.jnt.frames)
-            except Exception as err:
-                if self.params.PARANOID:
-                    raise
-                else:
-                    log.error('Animation doesn\'t apply as expected. Change animation importation parameters'
-                              'to isolate faulty file (error is %s)', err)
-
-        elif self.params.animationType == 'SEPARATE':
-            self.arm_obj.animation_data.action = None
+                
+                self.arm_obj.animation_data.action = None
+                
+                frame=1
+                for action in bpy.data.actions:
+                    #print( "action=%s" % action.name )
+                    #print( "action length=%d" % action.frame_range.y)
+                    frame = frame + action.frame_range.y
+                    #print( "frame: " + str(frame ))
+                    bpy.context.scene.frame_set( int(frame) )
+                    #print( "frame=%d" % frame)
+            
 
     def ExtractImages(self, force=False):
-        log.debug("ExtractImages function called")
+
         imageExt = '.' + self.params.imtype.lower()
 
-        if not os.path.exists(self._texturePath):
+        try:
             os.mkdir(self._texturePath)
+        except FileExistsError:
+            pass
 
-        self._images = common.getFiles("*"+imageExt, basedir=self._texturePath)
+        #self._images = common.getFiles(self._texturePath + os.sep+"*" + imageExt)
 
         if len(self._images) == 0 or force:
-            log.debug("Decided to actually extract images")
-            try:
-                common.SubProcCall(
-                    "bmdview",  # do not capitalize: unix-like OSes use case-sensitive paths.
-                    [self._bmdFilePath, self._texturePath, self.params.imtype],
-                    self._bmdViewPathExe,
-                )
-            except common.subprocess.CalledProcessError as err:
-                log.error('subprocess error: %s. Expect missing/glitchy textures', err)
-            else:
-                log.debug("Finished extracting images")
+            self.TryHiddenDOSCommand("bmdview",  # DO NOT capitalize: unix-like OSes use case-sensitive paths.
+                                     [self._bmdFilePath, self._texturePath, self.params.imtype],
+                                     self._bmdViewPathExe)
 
         # TODO: need to update BmdView.exe to process all file formats like BmdView2
         errorMessage = "Error generating dds / tga image file(s).\
                        Use BmdView2 to export the missing tga file(s)\
                        then delete the *.ERROR file(s) and run the importer again"
-        errorFiles = common.getFiles("*.ERROR", basedir=self._texturePath)
+        errorFiles = common.getFiles(self._texturePath + os.sep +"*.ERROR")
         for f in errorFiles:
             errorMessage += f + "\n"  # report file
             common.newfile(f[:-6] + imageExt)  # and avoid crashes in the future
         if len(errorFiles) != 0:
             log.error(errorMessage)
             return False
+
         return True
 
     def CreateBTPDataFile(self):
-        log.debug("dealing with BTP files, if any")
-        btpFiles = common.getFiles("..", "btp", "*.btp", basedir=self._bmdDir)
+        btpFiles = common.getFiles(self._bmdDir + "..\\btp\\*.btp".replace('\\', os.sep))
         # --messageBox (bckFiles as string)
 
         fBTP = open(self._bmdDir + "TextureAnimations.xml", 'w')
@@ -1002,11 +1038,11 @@ class BModel:
                 print("\t\t\t<Material>\n", file=fBTP)
                 print("\t\t\t\t<MaterialIndex>%d</MaterialIndex>\n" %anim.materialIndex, file=fBTP)
                 # -- print("\t\t\t\t<Name>%</Name>\n", anim.materialName, file=fBTP)
-                animationKeys = ""
+                animaitonKeys = ""
                 for key in anim.indices:
-                    animationKeys += "#"
-                    animationKeys += str(key)
-                print("\t\t\t\t<KeyFrames>%s</KeyFrames>\n" %animationKeys, file=fBTP)
+                    animaitonKeys = animaitonKeys + "#"
+                    animaitonKeys = animaitonKeys + str(key)
+                print("\t\t\t\t<KeyFrames>%s</KeyFrames>\n" %animaitonKeys, file=fBTP)
                 print("\t\t\t</Material>\n", file=fBTP)
                 # --messageBox (anim.animationName + ":" + animaitonKeys)
             print("\t\t</Animation>\n", file=fBTP)
@@ -1014,15 +1050,15 @@ class BModel:
         print("</TextureAnimation>", file=fBTP)
         fBTP.close()
 
-    def Import(self, filepath, **kw):
+    def Import(self, filename, **kw):
         # contents of kw:
         # imtype, tx_pck (packTextures), sv_anim (loadAnimations, animationType),
         # nat_bn (naturalBones, disables loadAnimations and animationType),
         # ic_sc (includeScaling), frc_cr_bn (forceCreateBones),
         # boneThickness, dvg (DEBUGBG), val_msh (valudate_mesh), paranoia (PARANOID)
         # use_nodes, no_rot_cv (no_rot_conversion)
-        self.params = common.Prog_params(filepath, **kw)
-
+        self.params = common.Prog_params(filename, **kw)
+        
         # provide access to parameters to other modules in this plugin. (kinda hacky solution)
         common.GLOBALS = self.params
 
@@ -1030,47 +1066,52 @@ class BModel:
         TexH.MODE = self.params.packTextures
         TexH.textures_reset()  # avoid use of potentially deleted data
 
-        # assuming filepath is 'P:\ath\to\file.bmd':
-        self._bmdFilePath = filepath
-        filepath_base, temp_ext = os.path.splitext(filepath)  # 'P:\ath\to\file', '.bmd'
-        self._bmdDir = filepath_base+ '_' + temp_ext[1:] + os.sep  # 'P:\ath\to\file_bmd\'
-        self._bmdPath, self._bmdFileName = os.path.split(filepath_base)  # 'P:\ath\to', 'file'
-        self._texturePath = self._bmdDir + "Textures"
+        #if filename = 'P:\ath\to\file.bmd',
+        self._bmdFilePath = filename
+        # this is 'P:\ath\to\file' and '.bmd' (the second string is useful because it can also be 'bdl'
+        temp_path, temp_ext = OSPath.splitext(filename)
+        # this is 'P:\ath\to\file_bmd\'
+        self._bmdDir = temp_path+ '_' + temp_ext[1:] + os.sep  # generates dir name from file name?
+        # P:\ath\to'
+        self._bmdPath = OSPath.split(temp_path)[0]
+        # file(.bmd?)
+        self._bmdFileName = common.getFilenameFile(filename)
+        # P:\ath\to\file_bmd\Textures
+        self._texturePath = os.path.abspath(os.path.join(self._bmdFilePath, os.pardir))
 
-        for path in [
-            "{1}{0}..{0}bck{0}*.bck",
-            "{1}{0}..{0}bcks{0}*.bck",
-            "{1}{0}..{0}scrn{0}*.bck",
-            "{1}{0}*.bck",
-        ]:
-            self._bckPaths.append(path.format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}bck{0}*.bck".format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}bcks{0}*.bck".format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}..{0}scrn{0}*.bck".format(os.sep, self._bmdPath))
+        self._bckPaths.append("{1}{0}*.bck".format(os.sep, self._bmdPath))
         self._btpPaths.append("{1}{0}..{0}btp{0}*.btp".format(os.sep, self._bmdPath))
 
-        if not os.path.exists(self._bmdDir):
-            os.mkdir(self._bmdDir)
-
         try:
-            self.LoadModel(filepath)
+            self.LoadModel(filename)
         except Exception as err:
             log.critical('Could not load bmd file: looks corrupted (error is %s)', err)
             raise
 
-        try:
-            self.ExtractImages()
-        except Exception as err:
-            log.error('Could not extract images. This could be the cause of a plugin crash'
-                      ' later on (error is %s)', err)
-        self.DrawScene()
+        #  XCX this should not be needed vvv
+        # if (not exportTextures) or (exportTextures and self.ExtractImages()):
+        if True:
+            try:
+                self.ExtractImages()
+            except Exception as err:
+                log.error('Could not extract images. This could be the cause of a plugin crash'
+                            ' later on (error is %s)', err)
+            self.DrawScene()
 
         try:
             self.CreateBTPDataFile()
         except Exception as err:
             log.warning('couldn\'t transform BTP animations into xml files. Model should beave normally nevertheless')
-        log.debug('Finished import!')
+        log.debug('end!')
 
     def __del__(self):
         if self._bones:
-            self._bones[0].pre_delete()  # fixes memory leak
+            self._bones[0].pre_delete()  # fixes momory leak
 
         MatH.MPL.MIX_GROUP_MTX = {}
         common.GLOBALS = None
+        # object.__del__(self)
+

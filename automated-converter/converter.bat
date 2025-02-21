@@ -1,1 +1,1 @@
-"<path_to>\blender.exe" -b -P "<path_to_>\IOmanager.py" "%1"
+"G:\Programme\Blender\blender.exe" -b -P "G:\Programme\Blender\3.1\scripts\addons\blemd\automated-converter\IOmanager.py" "%1"
